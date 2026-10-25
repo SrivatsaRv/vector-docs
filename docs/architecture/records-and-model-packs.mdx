@@ -1,0 +1,110 @@
+---
+title: "Records and model packs: compilation, archive structure and replay"
+sidebar_label: Records and model packs
+sidebar_position: 7
+hide_table_of_contents: true
+description: How model packs compile into immutable SI artifacts, what a VECTOR Simulation Record contains, and how a record is verified and replayed.
+---
+
+The compiler changes human-readable model sources into immutable, SI-normalized, content-addressed model packs. This occurs before an engine starts. Each run becomes a VECTOR Simulation Record (VSR). A VSR is a portable archive. Replay and debrief use the VSR and do not run the physics again.
+
+## Model pack compilation and use
+
+<ArchDiagram
+  label="Model packs: compileModelPack validates, resolves and converts up front; every consumer binds the exact pack digest"
+  rowPitch={170}
+  nodes={[
+    {id: 'source', title: 'ModelPackSource', sub: 'Units and evidence refs', col: 0, row: 0, tone: 'neutral'},
+    {id: 'validate', title: 'Validate', sub: 'IDs, units, ranges, tables', col: 1, row: 0, tone: 'gate'},
+    {id: 'resolve', title: 'Resolve references', sub: 'Reject cycles', col: 2, row: 0, tone: 'gate'},
+    {id: 'compat', title: 'Compatibility', sub: 'Stations, capacity', col: 3, row: 0, tone: 'gate'},
+    {id: 'digest', title: 'Convert and digest', sub: 'SI payload, SHA-256', col: 3, row: 1, tone: 'core'},
+    {id: 'pack', title: 'Compiled pack', sub: 'Immutable row, credibility', col: 2, row: 1, tone: 'output'},
+    {id: 'catalog', title: '/api/catalog', sub: 'Complete identity chain', col: 1, row: 1, tone: 'gate'},
+    {id: 'scenario', title: 'Scenario v4', sub: 'Binds exact digest', col: 0, row: 1, tone: 'decision'},
+    {id: 'env', title: 'EnvironmentPack', sub: 'Separate digest', col: 0, row: 2, tone: 'output'},
+    {id: 'mission', title: 'Air-mission compile', sub: 'Instance validation', col: 1, row: 2, tone: 'core'},
+    {id: 'engines', title: 'Engines', sub: 'Indexes and SI arrays', col: 2, row: 2, tone: 'core'},
+  ]}
+  edges={[
+    {from: 'source', to: 'validate'},
+    {from: 'validate', to: 'resolve'},
+    {from: 'resolve', to: 'compat'},
+    {from: 'compat', to: 'digest'},
+    {from: 'digest', to: 'pack'},
+    {from: 'pack', to: 'catalog'},
+    {from: 'catalog', to: 'scenario'},
+    {from: 'scenario', to: 'mission', fromAt: 0.75, toAt: 0.3},
+    {from: 'env', to: 'mission'},
+    {from: 'mission', to: 'engines'},
+  ]}
+  caption="No consumer reads source JSON or the database during a tick. A change to a governed value makes a new pack identity. The database does not let a user update or delete a published pack. The current reference pack is vector-scalar-study-models 0.9.0 in DRAFT state. Each aircraft in it has performanceAdmission set to UNSUPPORTED. Thus, requests for named-aircraft performance fail closed."
+/>
+
+## VSR archive members
+
+<ArchDiagram
+  label="VSR archive: ten members in a vector.archive.v1 envelope; the manifest binds the required replay members"
+  rowPitch={140}
+  groups={[{label: 'vector.archive.v1', nodes: ['manifest', 'scenario', 'compiled', 'entities', 'frames', 'events', 'pictures', 'sources', 'report', 'assets'], tone: 'dashed'}]}
+  nodes={[
+    {id: 'manifest', title: 'manifest.json', sub: 'Binds required digests', col: 0, row: 0, tone: 'output'},
+    {id: 'scenario', title: 'scenario.json', sub: 'vector.scenario.v4', col: 1, row: 0},
+    {id: 'compiled', title: 'compiled.json', sub: 'Engine input, pack digests', col: 2, row: 0},
+    {id: 'entities', title: 'entities.json', sub: 'Identity, affiliation', col: 3, row: 0},
+    {id: 'frames', title: 'frames.arrow', sub: 'Columnar v7, model truth', col: 0, row: 1, tone: 'core'},
+    {id: 'events', title: 'events.jsonl', sub: 'simulation-event v2', col: 1, row: 1},
+    {id: 'pictures', title: 'pictures.jsonl', sub: 'Optional, side-owned', col: 2, row: 1, tone: 'neutral'},
+    {id: 'sources', title: 'sources.json', sub: 'Facts and assumptions', col: 3, row: 1},
+    {id: 'report', title: 'report.json', sub: 'Frozen result, notes', col: 0, row: 2},
+    {id: 'assets', title: 'assets/', sub: 'Optional', col: 1, row: 2, tone: 'neutral'},
+  ]}
+  edges={[
+    {from: 'events', to: 'frames', label: 'frame index'},
+  ]}
+  legend={[
+    {tone: 'output', label: 'Manifest'},
+    {tone: 'core', label: 'Model truth'},
+    {tone: 'card', label: 'Required member'},
+    {tone: 'neutral', label: 'Optional member'},
+  ]}
+  caption="The envelope has a SHA-256 hash for each member. The manifest also binds the required replay members and a content digest. Observer pictures contain only track state that a side owns. Each value has one mark: recorded, computed, assumed or unknown. Viewers use recorded values first."
+/>
+
+## Record creation, verification and replay
+
+<ArchDiagram
+  label="Record lifecycle: a run produces an immutable VSR; opening it passes five fail-closed gates and replays without rerunning physics"
+  rowPitch={165}
+  groups={[{label: 'Open and verify', nodes: ['members', 'ids', 'pack', 'integrity'], tone: 'dashed'}]}
+  nodes={[
+    {id: 'draft', title: 'Draft admission', sub: 'Lexical, numeric, scenario', col: 0, row: 0, tone: 'gate'},
+    {id: 'compile', title: 'Compile scenario', sub: 'Model and environment', col: 1, row: 0, tone: 'core'},
+    {id: 'run', title: 'Worker run', sub: 'Admitted backend', col: 2, row: 0, tone: 'core'},
+    {id: 'create', title: 'Create VSR', sub: 'Canonical entity order', col: 3, row: 0, tone: 'core'},
+    {id: 'vsr', title: 'VSR archive', sub: 'Download or saved run', col: 3, row: 1, tone: 'output'},
+    {id: 'members', title: 'Member check', sub: 'Bounds, SHA-256, schemas', col: 3, row: 2, tone: 'gate'},
+    {id: 'ids', title: 'Identity digests', sub: 'Package, capability, env', col: 2, row: 2, tone: 'gate'},
+    {id: 'pack', title: 'Exact retained pack', sub: 'Never the current one', col: 1, row: 2, tone: 'gate'},
+    {id: 'integrity', title: 'Event integrity', sub: 'Lifecycle and causality', col: 0, row: 2, tone: 'gate'},
+    {id: 'terminal', title: 'Terminal replay', sub: 'When required', col: 0, row: 3, tone: 'gate'},
+    {id: 'open', title: 'Open record', sub: 'No physics rerun', col: 1, row: 3, tone: 'core'},
+    {id: 'views', title: 'Replay and debrief', sub: 'Map, 3D, RASP, report', col: 2, row: 3, tone: 'decision'},
+  ]}
+  edges={[
+    {from: 'draft', to: 'compile'},
+    {from: 'compile', to: 'run'},
+    {from: 'run', to: 'create'},
+    {from: 'create', to: 'vsr'},
+    {from: 'vsr', to: 'members'},
+    {from: 'members', to: 'ids'},
+    {from: 'ids', to: 'pack'},
+    {from: 'pack', to: 'integrity'},
+    {from: 'integrity', to: 'terminal'},
+    {from: 'terminal', to: 'open'},
+    {from: 'open', to: 'views'},
+  ]}
+  caption="Each amber step fails closed. A rejected draft has no run identity. A record that fails verification does not go to playback. Readback does not use the current pack, catalog row or environment version as a replacement. Terminal weapon records run again on the declared deterministic backend and must match exactly. A scenario edit makes a new draft revision. It cannot change a saved VSR."
+/>
+
+Source contracts: [vector-simulation-record](../contracts/vector-simulation-record) · [model-pack-contract](../contracts/model-pack-contract)

@@ -1,0 +1,67 @@
+name: Deploy to Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  # Picks up contract changes in vector-lab once a day.
+  schedule:
+    - cron: '30 2 * * *'
+
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PAGES_PROJECT: vector-docs
+
+jobs:
+  deploy:
+    # GitHub-hosted runners are free for public repositories. To use a self-hosted
+    # runner registered to this repository, set the repository variable DOCS_RUNNER
+    # to its label, for example "self-hosted".
+    runs-on: ${{ vars.DOCS_RUNNER || 'ubuntu-latest' }}
+    # The site must stay private. Set the repository variable PAGES_ACCESS_CONFIRMED
+    # to "true" only after a Cloudflare Access policy protects the Pages hostnames.
+    if: vars.PAGES_ACCESS_CONFIRMED == 'true'
+    steps:
+      - name: Check out the docs site
+        uses: actions/checkout@v4
+
+      - name: Check out the vector-lab contracts
+        uses: actions/checkout@v4
+        with:
+          repository: SrivatsaRv/vector-engagements-labs
+          ref: main
+          path: vector-lab
+          sparse-checkout: docs
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Build the site
+        run: npm run build
+        env:
+          VECTOR_LAB_DIR: ${{ github.workspace }}/vector-lab
+
+      - name: Place the build under /docs
+        run: npm run pages:assemble
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=${{ env.PAGES_PROJECT }} --branch=main --commit-dirty=true

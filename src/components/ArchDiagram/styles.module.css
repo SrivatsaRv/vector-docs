@@ -1,0 +1,253 @@
+.figure {
+  /* Light palette: soft tinted fills, ink-coloured titles, quieter subtitles. */
+  --arch-ink: #2b2a27;
+  --arch-muted: #55534e;
+  --arch-line: #85847e;
+  --arch-label-bg: #ffffff;
+  --arch-card-fill: #fbfbf9;
+  --arch-card-stroke: #dddcd6;
+  --arch-neutral-fill: #efeee9;
+  --arch-neutral-stroke: #8c8b85;
+  --arch-core-fill: #e5f4ed;
+  --arch-core-stroke: #3f7a5e;
+  --arch-core-ink: #1f4d3a;
+  --arch-core-sub: #2f6a4f;
+  --arch-decision-fill: #eeedfc;
+  --arch-decision-stroke: #7c76d8;
+  --arch-decision-ink: #2e2a82;
+  --arch-decision-sub: #4b44c4;
+  --arch-output-fill: #f8eae4;
+  --arch-output-stroke: #b4644a;
+  --arch-output-ink: #6b2a14;
+  --arch-output-sub: #9a4426;
+  --arch-edge-fill: #e8f1fb;
+  --arch-edge-stroke: #4f7fb8;
+  --arch-edge-ink: #1d3f66;
+  --arch-edge-sub: #2f5f93;
+  --arch-gate-fill: #fbf3dc;
+  --arch-gate-stroke: #b8902c;
+  --arch-gate-ink: #5c4510;
+  --arch-gate-sub: #82621a;
+  --arch-dashed-stroke: #cfcfca;
+  --arch-blocked: #c2410c;
+
+  margin: 1.5rem 0 2.25rem;
+}
+
+:global([data-theme='dark']) .figure {
+  --arch-ink: #ecebe6;
+  --arch-muted: #b9b7b0;
+  --arch-line: #8f8e88;
+  --arch-label-bg: #0b1120;
+  --arch-card-fill: #1a1f2b;
+  --arch-card-stroke: #343b4a;
+  --arch-neutral-fill: #23262d;
+  --arch-neutral-stroke: #6b6a65;
+  --arch-core-fill: #13291f;
+  --arch-core-stroke: #4f9c78;
+  --arch-core-ink: #bfe8d3;
+  --arch-core-sub: #8fcfae;
+  --arch-decision-fill: #1e1c3d;
+  --arch-decision-stroke: #8a84e6;
+  --arch-decision-ink: #d9d6ff;
+  --arch-decision-sub: #aaa5f5;
+  --arch-output-fill: #2e1a14;
+  --arch-output-stroke: #c97a5f;
+  --arch-output-ink: #f5d2c4;
+  --arch-output-sub: #e3a48c;
+  --arch-edge-fill: #12233a;
+  --arch-edge-stroke: #5f93d1;
+  --arch-edge-ink: #cfe2f8;
+  --arch-edge-sub: #9cc0ea;
+  --arch-gate-fill: #2b2412;
+  --arch-gate-stroke: #c9a443;
+  --arch-gate-ink: #f3e3b5;
+  --arch-gate-sub: #dcc178;
+  --arch-dashed-stroke: #3a3f4b;
+  --arch-blocked: #f08a5d;
+}
+
+.scroller {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  margin: 0 auto;
+  height: auto;
+  font-family: var(--ifm-font-family-base);
+}
+
+.caption {
+  margin-top: 0.6rem;
+  font-size: 0.92rem;
+  color: var(--ifm-color-emphasis-700);
+  line-height: 1.5;
+}
+
+/* Groups */
+.group {
+  stroke-width: 1.4;
+}
+.group_dashed {
+  fill: none;
+  stroke: var(--arch-dashed-stroke);
+  stroke-dasharray: 7 6;
+}
+.group_core {
+  fill: var(--arch-core-fill);
+  stroke: var(--arch-core-stroke);
+}
+.group_decision {
+  fill: var(--arch-decision-fill);
+  stroke: var(--arch-decision-stroke);
+  fill-opacity: 0.55;
+}
+.group_output {
+  fill: var(--arch-output-fill);
+  stroke: var(--arch-output-stroke);
+  fill-opacity: 0.55;
+}
+.group_edge {
+  fill: var(--arch-edge-fill);
+  stroke: var(--arch-edge-stroke);
+  fill-opacity: 0.6;
+}
+
+.groupLabel {
+  font-size: 19px;
+  font-weight: 500;
+  fill: var(--arch-muted);
+}
+.groupLabel_core {
+  fill: var(--arch-core-ink);
+}
+.groupLabel_decision {
+  fill: var(--arch-decision-ink);
+}
+.groupLabel_output {
+  fill: var(--arch-output-ink);
+}
+.groupLabel_edge {
+  fill: var(--arch-edge-ink);
+}
+
+/* Nodes */
+.node {
+  stroke-width: 1.2;
+}
+.node_card {
+  fill: var(--arch-card-fill);
+  stroke: var(--arch-card-stroke);
+}
+.node_neutral {
+  fill: var(--arch-neutral-fill);
+  stroke: var(--arch-neutral-stroke);
+}
+.node_core {
+  fill: var(--arch-core-fill);
+  stroke: var(--arch-core-stroke);
+}
+.node_decision {
+  fill: var(--arch-decision-fill);
+  stroke: var(--arch-decision-stroke);
+}
+.node_output {
+  fill: var(--arch-output-fill);
+  stroke: var(--arch-output-stroke);
+}
+.node_edge {
+  fill: var(--arch-edge-fill);
+  stroke: var(--arch-edge-stroke);
+}
+.node_gate {
+  fill: var(--arch-gate-fill);
+  stroke: var(--arch-gate-stroke);
+}
+
+.title,
+.title_card,
+.title_neutral {
+  fill: var(--arch-ink);
+}
+.title_core {
+  fill: var(--arch-core-ink);
+}
+.title_decision {
+  fill: var(--arch-decision-ink);
+}
+.title_output {
+  fill: var(--arch-output-ink);
+}
+.title_edge {
+  fill: var(--arch-edge-ink);
+}
+.title_gate {
+  fill: var(--arch-gate-ink);
+}
+
+.sub,
+.sub_card,
+.sub_neutral {
+  fill: var(--arch-muted);
+}
+.sub_core {
+  fill: var(--arch-core-sub);
+}
+.sub_decision {
+  fill: var(--arch-decision-sub);
+}
+.sub_output {
+  fill: var(--arch-output-sub);
+}
+.sub_edge {
+  fill: var(--arch-edge-sub);
+}
+.sub_gate {
+  fill: var(--arch-gate-sub);
+}
+
+/* Edges */
+.edge {
+  fill: none;
+  stroke: var(--arch-line);
+  stroke-width: 1.8;
+}
+.edgeDashed {
+  stroke-dasharray: 6 5;
+}
+.arrowHead {
+  fill: none;
+  stroke: var(--arch-line);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.edgeLabelBg {
+  fill: var(--arch-label-bg);
+}
+.edgeLabel {
+  font-size: 12.5px;
+  fill: var(--arch-muted);
+}
+
+.legendLabel {
+  font-size: 15px;
+  fill: var(--arch-muted);
+}
+
+.edgeBlocked {
+  stroke: var(--arch-blocked);
+  stroke-dasharray: 6 5;
+}
+.blockedHead {
+  fill: none;
+  stroke: var(--arch-blocked);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+.edgeLabelBlocked {
+  fill: var(--arch-blocked);
+}

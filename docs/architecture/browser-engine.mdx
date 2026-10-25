@@ -1,0 +1,128 @@
+---
+title: "Browser simulation engine: from scenario to recorded frames"
+sidebar_label: Browser simulation engine
+sidebar_position: 2
+hide_table_of_contents: true
+description: How an authored scenario becomes immutable sampled frames inside the dedicated browser Worker.
+---
+
+The Construct stage makes one immutable scenario package. The compiler resolves the package. A fixed-step engine in a dedicated browser Web Worker moves each declared entity. Map, 3D, telemetry, RASP, explanation, comparison and reports read the same recorded frames. These consumers do not write to the engine.
+
+## Scenario compilation, admission and recorded frames
+
+<ArchDiagram
+  label="Scenario to frames: the package is admitted on the main thread and again in the Worker, then one record feeds every consumer"
+  rowPitch={190}
+  groups={[
+    {label: 'Main thread: construct and compile', nodes: ['draft', 'package', 'admit', 'compiler'], tone: 'dashed'},
+    {label: 'Dedicated simulation Worker', nodes: ['digest', 'engine', 'vsr'], tone: 'core'},
+  ]}
+  nodes={[
+    {id: 'draft', title: 'Editable draft', sub: 'From published templates', col: 0, row: 0, tone: 'decision'},
+    {id: 'package', title: 'Scenario package v4', sub: 'Immutable', col: 1, row: 0, tone: 'output'},
+    {id: 'admit', title: 'Admission', sub: 'Numeric and relational', col: 2, row: 0, tone: 'gate'},
+    {id: 'compiler', title: 'Compiler', sub: 'Catalog and coefficients', col: 3, row: 0, tone: 'core'},
+    {id: 'digest', title: 'Worker admission', sub: 'Package ref, mission digest', col: 3, row: 1, tone: 'gate'},
+    {id: 'engine', title: 'Fixed-step engine', sub: 'All declared entities', col: 2, row: 1},
+    {id: 'vsr', title: 'VSR record', sub: 'Frames and diagnostics', col: 1, row: 1, tone: 'output'},
+    {id: 'observe', title: 'Observe and explain', sub: 'Map, 3D, telemetry, RASP', col: 0, row: 2, tone: 'decision'},
+    {id: 'save', title: 'Save run', sub: 'Server recomputes frames', col: 2, row: 2, tone: 'edge'},
+    {id: 'saved', title: 'Saved runs', sub: 'Reports read only these', col: 3, row: 2, tone: 'output'},
+  ]}
+  edges={[
+    {from: 'draft', to: 'package'},
+    {from: 'package', to: 'admit'},
+    {from: 'admit', to: 'compiler'},
+    {from: 'compiler', to: 'digest', label: 'EngineScenario'},
+    {from: 'digest', to: 'engine'},
+    {from: 'engine', to: 'vsr'},
+    {from: 'vsr', to: 'observe', label: 'read-only'},
+    {from: 'vsr', to: 'save'},
+    {from: 'save', to: 'saved'},
+  ]}
+  legend={[
+    {tone: 'decision', label: 'Browser UI'},
+    {tone: 'core', label: 'Engine'},
+    {tone: 'gate', label: 'Fail-closed gate'},
+    {tone: 'output', label: 'Immutable record'},
+    {tone: 'edge', label: 'Service'},
+  ]}
+  caption="The system admits the package two times. The first check occurs before dispatch. The second check occurs in the Worker against the mission digest. The engine makes one content-addressed record. Each consumer reads this record and does not change it."
+/>
+
+## Thread interaction during one simulation run
+
+<ArchDiagram
+  label="One run: the main thread requests by digest, the Worker drives the admitted backend in batches and returns a verified record"
+  rowPitch={180}
+  groups={[
+    {label: 'Main thread client', nodes: ['load', 'run', 'match'], tone: 'decision'},
+    {label: 'Simulation Worker', nodes: ['recompile', 'resolve', 'build'], tone: 'core'},
+    {label: 'Admitted backend', nodes: ['ticks'], tone: 'dashed'},
+  ]}
+  nodes={[
+    {id: 'load', title: 'Load compiled input', sub: 'Keyed by SHA-256 digest', col: 0, row: 0},
+    {id: 'run', title: 'Request run', sub: 'Digest, scenarioRef, receipt', col: 1, row: 0},
+    {id: 'match', title: 'Match receipt', sub: 'Manifest identity', col: 3, row: 0},
+    {id: 'recompile', title: 'Recompile mission', sub: 'Must reproduce digest', col: 0, row: 1},
+    {id: 'resolve', title: 'Resolve package', sub: 'Exact tuple and backend', col: 1, row: 1},
+    {id: 'build', title: 'Build and verify VSR', sub: 'Then open it', col: 3, row: 1},
+    {id: 'ticks', title: 'runTicks batches', sub: '128 fixed steps each', col: 2, row: 2},
+  ]}
+  edges={[
+    {from: 'load', to: 'recompile'},
+    {from: 'run', to: 'resolve'},
+    {from: 'resolve', to: 'ticks', fromSide: 'bottom', toSide: 'left', label: 'runTicks(count)'},
+    {from: 'ticks', to: 'build', fromSide: 'right', toSide: 'bottom', label: 'frames, events'},
+    {from: 'build', to: 'match', label: 'transferred buffer'},
+  ]}
+  caption="The diagram shows the cooperative loop of the TypeScript backend. The Worker sends progress a maximum of 20 times each wall-clock second. The Rust/WASM backend makes one rust-json-v1 call for the full run. It cannot pause during that call. A cancel or a timeout stops the Worker."
+/>
+
+## Entity lifecycle states and transitions
+
+<ArchDiagram
+  label="Entity lifecycle: carried stores stay STOWED until launch; active entities terminate only through engine-owned events"
+  rowPitch={150}
+  nodes={[
+    {id: 'carried', title: 'Carried weapon or store', col: 0, row: 0, tone: 'neutral'},
+    {id: 'declared', title: 'Declared entity', col: 1.3, row: 0, tone: 'neutral'},
+    {id: 'stowed', title: 'STOWED', sub: 'Omitted from frames', col: 0, row: 1},
+    {id: 'active', title: 'ACTIVE', sub: 'Integrated every step', col: 1.3, row: 1, tone: 'core'},
+    {id: 'terminated', title: 'TERMINATED', sub: 'Engine-owned event', col: 2.6, row: 1, tone: 'output'},
+  ]}
+  edges={[
+    {from: 'carried', to: 'stowed'},
+    {from: 'declared', to: 'active'},
+    {from: 'stowed', to: 'active', label: 'launch or transfer'},
+    {from: 'active', to: 'terminated', label: 'terminated or KILL'},
+  ]}
+  caption="A launch copies the position, velocity and heading of the launcher into the initial world state of the weapon. A rejected transfer keeps the store STOWED. A WEAPON_TERMINATED event or a committed KILL effect terminates an entity. A NO_EFFECT result keeps the target ACTIVE."
+/>
+
+## Clock ownership by thread
+
+<ArchDiagram
+  label="Clock ownership: the Worker owns model time; playback and render time derive from the completed record; wall time never enters physics"
+  rowPitch={170}
+  groups={[
+    {label: 'Simulation Worker', nodes: ['model'], tone: 'core'},
+    {label: 'Browser main thread', nodes: ['playback', 'render', 'wall'], tone: 'dashed'},
+  ]}
+  nodes={[
+    {id: 'model', title: 'Model time', sub: 'Fixed step, owns physics', col: 0, row: 0},
+    {id: 'record', title: 'Completed record', sub: 'Canonical frames', col: 1, row: 0, tone: 'output'},
+    {id: 'playback', title: 'Playback time', sub: 'Seek, pause, speed', col: 2, row: 0, tone: 'decision'},
+    {id: 'render', title: 'Render time', sub: 'requestAnimationFrame', col: 3, row: 0, tone: 'decision'},
+    {id: 'wall', title: 'Wall clock', sub: 'Progress and timeout', col: 3, row: 1, tone: 'decision'},
+  ]}
+  edges={[
+    {from: 'model', to: 'record'},
+    {from: 'record', to: 'playback'},
+    {from: 'playback', to: 'render'},
+    {from: 'wall', to: 'model', fromSide: 'left', toSide: 'bottom', blocked: true, label: 'never enters physics or ordering'},
+  ]}
+  caption="Each clock has one owner only. The client uses wall-clock time for progress and timeouts only."
+/>
+
+Source contract: [browser-engine-architecture](../contracts/browser-engine-architecture)

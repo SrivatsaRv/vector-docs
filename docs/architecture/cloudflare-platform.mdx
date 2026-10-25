@@ -1,0 +1,123 @@
+---
+title: "Cloudflare platform: runtime topology, deployment and admission"
+sidebar_label: Cloudflare platform
+sidebar_position: 5
+hide_table_of_contents: true
+description: Runtime topology on Cloudflare, the production deployment gates, and the run and saved-run admission flow.
+---
+
+In production, a stateless Cloudflare Worker serves the application. Simulation runs stay in the browser. The Worker connects to PostgreSQL/PostGIS through Hyperdrive. Deployment does not build the application again. It promotes one exact Worker candidate that a green `main` CI run tested.
+
+## Runtime topology on Cloudflare
+
+<ArchDiagram
+  label="Runtime topology: the browser runs the engine; a stateless Cloudflare Worker serves catalog and saved-run APIs through Hyperdrive to managed PostgreSQL"
+  rowPitch={190}
+  groups={[
+    {label: 'Browser', nodes: ['ui', 'simw'], tone: 'decision'},
+    {label: 'Cloudflare', nodes: ['cdn', 'app', 'hd', 'limits', 'cache', 'r2'], tone: 'edge'},
+  ]}
+  nodes={[
+    {id: 'ui', title: 'Workbench UI', sub: 'Construct, observe, report', col: 0, row: 0},
+    {id: 'simw', title: 'Simulation Worker', sub: 'TypeScript engine', col: 1, row: 0, tone: 'core'},
+    {id: 'otlp', title: 'OTLP collector', sub: 'Managed telemetry', col: 3, row: 0, tone: 'neutral'},
+    {id: 'cdn', title: 'CDN', sub: 'Static assets', col: 0, row: 1},
+    {id: 'app', title: 'Application Worker', sub: 'vinext build, stateless', col: 1, row: 1},
+    {id: 'hd', title: 'Hyperdrive', sub: 'Cached reads, fresh writes', col: 2, row: 1},
+    {id: 'pg', title: 'PostgreSQL + PostGIS', sub: '16 and 3.4, managed', col: 3, row: 1, tone: 'output'},
+    {id: 'limits', title: 'Rate limiters', sub: 'API, telemetry, tiles', col: 0, row: 2, tone: 'gate'},
+    {id: 'cache', title: 'Cache API', sub: 'Public catalog and tiles', col: 1, row: 2},
+    {id: 'r2', title: 'R2 ARTIFACTS', sub: 'Optional binding', col: 2, row: 2, tone: 'output'},
+  ]}
+  edges={[
+    {from: 'ui', to: 'simw'},
+    {from: 'ui', to: 'cdn', fromAt: 0.3, toAt: 0.3},
+    {from: 'ui', to: 'app', fromAt: 0.75, toAt: 0.3, label: 'catalog, saved runs'},
+    {from: 'app', to: 'otlp', fromSide: 'top', fromAt: 0.8, dashed: true, label: 'telemetry'},
+    {from: 'app', to: 'hd'},
+    {from: 'hd', to: 'pg'},
+    {from: 'app', to: 'limits', fromAt: 0.2},
+    {from: 'app', to: 'cache'},
+    {from: 'app', to: 'r2', fromAt: 0.8, dashed: true},
+  ]}
+  legend={[
+    {tone: 'decision', label: 'Browser'},
+    {tone: 'core', label: 'Engine'},
+    {tone: 'edge', label: 'Cloudflare'},
+    {tone: 'output', label: 'Storage'},
+    {tone: 'gate', label: 'Guard'},
+    {tone: 'neutral', label: 'External'},
+  ]}
+  caption="The Worker does not calculate physics frames. Simulation ticks do not reach the database. Rate limiters only control cost. The application controls are database timeouts, limits on request bodies and server-side reconstruction of saved runs. Dashed paths are optional. Durable Objects are not authorized."
+/>
+
+## Deployment that promotes one exact build
+
+<ArchDiagram
+  label="Deployment: CI builds one candidate; the production workflow admits it, verifies bytes and ledger, migrates forward-only, then deploys and probes"
+  rowPitch={190}
+  groups={[
+    {label: 'main CI run', nodes: ['prGate', 'build', 'dryRun', 'candidate'], tone: 'dashed'},
+    {label: 'Protected production environment', nodes: ['admit', 'approve', 'bytes', 'ledger', 'migrate', 'catalog', 'deploy', 'probe'], tone: 'dashed'},
+  ]}
+  nodes={[
+    {id: 'prGate', title: 'Required PR Gate', sub: 'Green on main', col: 0, row: 0, tone: 'gate'},
+    {id: 'build', title: 'One production build', col: 1, row: 0, tone: 'edge'},
+    {id: 'dryRun', title: 'Dry-run checks', sub: 'Config, assets, Wrangler', col: 2, row: 0, tone: 'gate'},
+    {id: 'candidate', title: 'SHA-named candidate', sub: 'Inventory, kept 30 days', col: 3, row: 0, tone: 'output'},
+    {id: 'admit', title: 'Dispatch admission', sub: 'main SHA, green, unexpired', col: 3, row: 1, tone: 'gate'},
+    {id: 'approve', title: 'Maintainer approval', sub: 'Then credentials exposed', col: 2, row: 1, tone: 'gate'},
+    {id: 'bytes', title: 'Byte check', sub: 'Reject changed files', col: 1, row: 1, tone: 'gate'},
+    {id: 'ledger', title: 'Ledger prefix check', sub: 'Read-only, Hyperdrive ok', col: 0, row: 1, tone: 'gate'},
+    {id: 'migrate', title: 'Apply migrations', sub: 'Forward-only', col: 0, row: 2, tone: 'output'},
+    {id: 'catalog', title: 'Catalog verifier', sub: 'Read-only transaction', col: 1, row: 2, tone: 'gate'},
+    {id: 'deploy', title: 'wrangler deploy', sub: 'Exact candidate bytes', col: 2, row: 2, tone: 'edge'},
+    {id: 'probe', title: 'Live probes', sub: 'Health, catalog, BVR, map', col: 3, row: 2, tone: 'gate'},
+  ]}
+  edges={[
+    {from: 'prGate', to: 'build'},
+    {from: 'build', to: 'dryRun'},
+    {from: 'dryRun', to: 'candidate'},
+    {from: 'candidate', to: 'admit'},
+    {from: 'admit', to: 'approve'},
+    {from: 'approve', to: 'bytes'},
+    {from: 'bytes', to: 'ledger'},
+    {from: 'ledger', to: 'migrate', label: 'deploy only'},
+    {from: 'migrate', to: 'catalog'},
+    {from: 'catalog', to: 'deploy'},
+    {from: 'deploy', to: 'probe'},
+  ]}
+  caption="Each amber step fails closed. The verify operation stops after the ledger check and gives a report only. Production never gets seed data automatically. A rollback deploys the prior Worker artifact again. It does not remove applied migrations. A rollback fails closed if the live ledger is not an exact prefix of the selected revision."
+/>
+
+## Admission receipt checks for runs and saved runs
+
+<ArchDiagram
+  label="Admission receipt: one request-scoped receipt is re-checked by the Worker, the browser client and the saved-run API"
+  rowPitch={215}
+  groups={[
+    {label: 'Workbench UI', nodes: ['receipt', 'accept', 'save', 'acceptSaved'], tone: 'decision'},
+    {label: 'Simulation Worker', nodes: ['workerCheck'], tone: 'core'},
+    {label: 'Saved-run API', nodes: ['apiCheck', 'persist'], tone: 'edge'},
+  ]}
+  nodes={[
+    {id: 'receipt', title: 'Build receipt', sub: 'Request ID, draft digest', col: 0, row: 0},
+    {id: 'accept', title: 'Accept completion', sub: 'Same ID, latest draft', col: 1, row: 0},
+    {id: 'save', title: 'Save', sub: 'Scenario and receipt', col: 2, row: 0},
+    {id: 'acceptSaved', title: 'Accept saved ID', sub: 'Receipt checked again', col: 3, row: 0},
+    {id: 'workerCheck', title: 'Recompute digest', sub: 'From admitted scenario', col: 0, row: 1, tone: 'gate'},
+    {id: 'apiCheck', title: 'Check digest first', sub: 'Before any validation', col: 2, row: 2, tone: 'gate'},
+    {id: 'persist', title: 'Validate and persist', sub: 'Recompute, then store', col: 3, row: 2},
+  ]}
+  edges={[
+    {from: 'receipt', to: 'workerCheck', label: 'run + receipt'},
+    {from: 'workerCheck', to: 'accept', fromSide: 'right', toSide: 'bottom', label: 'VSR + echoed receipt'},
+    {from: 'accept', to: 'save'},
+    {from: 'save', to: 'apiCheck'},
+    {from: 'apiCheck', to: 'persist'},
+    {from: 'persist', to: 'acceptSaved', label: 'saved ID + receipt'},
+  ]}
+  caption="A mismatch at the Worker or at the API returns the same DRAFT_ADMISSION_* code. Thus, a stale or changed draft cannot make results, a saved run or a report. The client discards cancelled and superseded completions. When the Worker loads a pack, it calculates the capability manifest hash again. If the hash does not match the deployment, the Worker fails with capability-manifest-stale."
+/>
+
+Source contracts: [cloudflare-architecture](../contracts/cloudflare-architecture) · [deployment-capabilities](../contracts/deployment-capabilities) · [scenario-builder](../contracts/scenario-builder)

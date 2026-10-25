@@ -1,0 +1,38 @@
+---
+title: Vector Engagement Labs documentation
+sidebar_label: Welcome
+sidebar_position: 1
+slug: /
+hide_table_of_contents: true
+description: Engineering and product documentation for Vector Engagement Labs.
+---
+
+Reach Defence builds Vector Engagement Labs. It is a browser-based laboratory for engagement experiments. Each run shows its assumptions, synchronized simulation views, comparisons and reproducible reports.
+
+This site has two parts.
+
+- **[Architecture diagrams](architecture/overview)** show how the system operates. Each diagram is data in this repository.
+- **[Contracts](contracts)** are the maintained engineering contracts. Each build copies them from `vector-lab/docs`. Edit the contracts in the vector-lab repository only.
+
+## Build process that keeps this site current
+
+<ArchDiagram
+  label="Build process: the sync script copies contracts from vector-lab, and the build combines them with the diagram pages"
+  rowPitch={150}
+  nodes={[
+    {id: 'source', title: 'vector-lab/docs', sub: 'Source of the contracts', col: 0, row: 0, tone: 'output'},
+    {id: 'sync', title: 'Sync script', sub: 'Runs before start and build', col: 1, row: 0, tone: 'edge'},
+    {id: 'contracts', title: 'docs/contracts', sub: 'Generated, not in Git', col: 2, row: 0, tone: 'output'},
+    {id: 'diagrams', title: 'docs/architecture', sub: 'Diagrams as data', col: 2, row: 1, tone: 'core'},
+    {id: 'build', title: 'docusaurus build', sub: 'Broken links stop it', col: 3, row: 0.5, tone: 'gate'},
+    {id: 'site', title: 'Static site', sub: 'build/ directory', col: 3, row: 1.5, tone: 'decision'},
+  ]}
+  edges={[
+    {from: 'source', to: 'sync'},
+    {from: 'sync', to: 'contracts'},
+    {from: 'contracts', to: 'build', fromSide: 'right', toSide: 'left', toAt: 0.3},
+    {from: 'diagrams', to: 'build', fromSide: 'right', toSide: 'left', toAt: 0.7},
+    {from: 'build', to: 'site'},
+  ]}
+  caption="The contracts have one source, the vector-lab repository. The diagram pages belong to this repository. A broken link stops the build."
+/>

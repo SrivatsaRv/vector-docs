@@ -1,0 +1,107 @@
+---
+title: "RASP information state: tracks, ground operations and observer pictures"
+sidebar_label: RASP information state
+sidebar_position: 4
+hide_table_of_contents: true
+description: Side-owned track lifecycle, ground-operation states, and what an observer picture may depend on.
+---
+
+Each side has its own picture of the engagement. The picture uses only admitted sensor models and tracks that the side owns. It does not use model truth. The deployed reference pack has no positive-range sensor model. Thus, production runs report `UNSUPPORTED`. A pack for engine verification only tests the track mechanics below.
+
+## Track lifecycle states and transitions
+
+<ArchDiagram
+  label="Track lifecycle: tentative tracks confirm, coast when stale, and are lost when expired; only confirmed and coasting tracks are visible"
+  rowPitch={170}
+  nodes={[
+    {id: 'first', title: 'First observation', col: 0, row: 0, tone: 'neutral'},
+    {id: 'tentative', title: 'TENTATIVE', sub: 'Not visible', col: 1.25, row: 0},
+    {id: 'confirmed', title: 'CONFIRMED', sub: 'Visible', col: 2.5, row: 0, tone: 'core'},
+    {id: 'coasting', title: 'COASTING', sub: 'Visible', col: 3.75, row: 0, tone: 'core'},
+    {id: 'lost', title: 'LOST', sub: 'Kept for reacquisition', col: 2.5, row: 1},
+  ]}
+  edges={[
+    {from: 'first', to: 'tentative'},
+    {from: 'tentative', to: 'confirmed', label: 'threshold met'},
+    {from: 'confirmed', to: 'coasting', label: 'freshness expired'},
+    {from: 'coasting', to: 'confirmed', fromSide: 'top', toSide: 'top', via: 44, label: 'observation reacquired'},
+    {from: 'tentative', to: 'lost', fromSide: 'bottom', fromAt: 0.7, toSide: 'top', toAt: 0.2},
+    {from: 'confirmed', to: 'lost', label: 'track expired'},
+    {from: 'coasting', to: 'lost', fromSide: 'bottom', toSide: 'top', toAt: 0.8},
+    {from: 'lost', to: 'tentative', fromSide: 'left', toSide: 'bottom', toAt: 0.3, label: 'reacquired'},
+  ]}
+  legend={[
+    {tone: 'core', label: 'Visible in side picture'},
+    {tone: 'card', label: 'Not visible'},
+  ]}
+  caption="Each transition occurs at its exact tick as a TRACK_STATE_CHANGED event. The event refers to the prior event for that opaque track. A track in any other state goes to LOST when it expires."
+/>
+
+## Ground-operation state sequence
+
+<ArchDiagram
+  label="Ground operations: a fixed one-way sequence from parked or hold-short to enroute, then hand-off to the airborne route controller"
+  rowPitch={140}
+  nodes={[
+    {id: 'parked', title: 'PARKED', col: 0, row: 0},
+    {id: 'hold', title: 'HOLD_SHORT', col: 0, row: 1},
+    {id: 'roll', title: 'TAKEOFF_ROLL', col: 1, row: 0},
+    {id: 'rotate', title: 'ROTATE', col: 2, row: 0},
+    {id: 'climb', title: 'CLIMBOUT', col: 3, row: 0},
+    {id: 'enroute', title: 'ENROUTE', col: 3, row: 1, tone: 'core'},
+    {id: 'route', title: 'Route controller', sub: 'Airborne guidance', col: 2, row: 1, tone: 'neutral'},
+  ]}
+  edges={[
+    {from: 'parked', to: 'roll'},
+    {from: 'hold', to: 'roll', fromSide: 'right', toSide: 'bottom'},
+    {from: 'roll', to: 'rotate'},
+    {from: 'rotate', to: 'climb'},
+    {from: 'climb', to: 'enroute'},
+    {from: 'enroute', to: 'route'},
+  ]}
+  caption="A maximum of one transition occurs in each integer tick. The engine rejects a skipped or forbidden transition. If movement is UNAVAILABLE, the aircraft stays in its start state. This sequence is canonical entity state. It is not a RASP observation."
+/>
+
+## Data sources that an observer picture can use
+
+<ArchDiagram
+  label="Observer picture: compiled admissions gate every sensor, one producer per side feeds its TrackStore, and the recorded picture is admitted again before display"
+  rowPitch={190}
+  groups={[
+    {label: 'Compiler', nodes: ['pack', 'evidence', 'projection'], tone: 'dashed'},
+    {label: 'Engine tick, per side', nodes: ['producer', 'observation', 'trackGate', 'store'], tone: 'core'},
+    {label: 'Record and display', nodes: ['display', 'pictureGate', 'recorded', 'picture'], tone: 'dashed'},
+  ]}
+  nodes={[
+    {id: 'pack', title: 'Compiled model pack', col: 0, row: 0, tone: 'output'},
+    {id: 'evidence', title: 'Sensor evidence', sub: 'Admission', col: 1, row: 0, tone: 'gate'},
+    {id: 'projection', title: 'Observer projection', sub: 'Admitted sensors', col: 2, row: 0},
+    {id: 'entity', title: 'Entity admission', sub: 'Matches projection', col: 3, row: 0, tone: 'gate'},
+    {id: 'producer', title: 'One producer', sub: 'Lowest entity ID', col: 0, row: 1},
+    {id: 'observation', title: 'observation.v1', sub: 'Estimate, uncertainty', col: 1, row: 1, tone: 'output'},
+    {id: 'trackGate', title: 'TrackStore admission', col: 2, row: 1, tone: 'gate'},
+    {id: 'store', title: 'Side TrackStore', sub: 'Opaque tracks', col: 3, row: 1},
+    {id: 'picture', title: 'Side picture', sub: 'observer-state v3', col: 3, row: 2, tone: 'output'},
+    {id: 'recorded', title: 'Recorded pictures', sub: 'frames v6, pictures v4', col: 2, row: 2, tone: 'output'},
+    {id: 'pictureGate', title: 'Picture admission', sub: 'No truth position', col: 1, row: 2, tone: 'gate'},
+    {id: 'display', title: 'RASP display', sub: 'information-state', col: 0, row: 2, tone: 'decision'},
+    {id: 'truth', title: 'Model Truth, effects', sub: 'Environment, route profile', col: 3, row: 3, tone: 'neutral'},
+  ]}
+  edges={[
+    {from: 'pack', to: 'evidence'},
+    {from: 'evidence', to: 'projection'},
+    {from: 'projection', to: 'entity'},
+    {from: 'entity', to: 'producer'},
+    {from: 'producer', to: 'observation'},
+    {from: 'observation', to: 'trackGate'},
+    {from: 'trackGate', to: 'store'},
+    {from: 'store', to: 'picture'},
+    {from: 'picture', to: 'recorded'},
+    {from: 'recorded', to: 'pictureGate'},
+    {from: 'pictureGate', to: 'display'},
+    {from: 'truth', to: 'picture', blocked: true, label: 'cannot feed'},
+  ]}
+  caption="If no sensor is admitted, the pack gives an observer-state v2 UNSUPPORTED picture. Model Truth, target effects, environment samples, authored route profiles and the sensor source manifest cannot create an observation, a track or visibility."
+/>
+
+Source contract: [rasp-state-machine](../contracts/rasp-state-machine)

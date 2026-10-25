@@ -1,0 +1,95 @@
+---
+title: "Governance and release: pull requests, tags and promotion"
+sidebar_label: Governance and release
+sidebar_position: 6
+hide_table_of_contents: true
+description: How changes reach protected main, how container releases are tagged and published, and how migrations and promotion are ordered.
+---
+
+All work goes into `main` through a pull request. The CI pipeline runs only the gates that the change selects. One stable Required PR Gate gives the result. Releases publish immutable images that have a digest address. No tag moves after publication.
+
+## Pull request flow to the protected main branch
+
+<ArchDiagram
+  label="Pull request flow: Stage 0 selects jobs, one Required PR Gate aggregates them, and branch protection admits the merge"
+  rowPitch={170}
+  nodes={[
+    {id: 'branch', title: 'Feature branch', col: 0, row: 0, tone: 'decision'},
+    {id: 'pr', title: 'Pull request', sub: 'Into main', col: 1, row: 0, tone: 'decision'},
+    {id: 'stage0', title: 'Stage 0', sub: 'Classify the change set', col: 2, row: 0, tone: 'gate'},
+    {id: 'policy', title: 'Policy tests', sub: 'Always run', col: 3, row: 0, tone: 'edge'},
+    {id: 'jobs', title: 'Selected jobs', sub: 'Run in parallel', col: 2, row: 1, tone: 'edge'},
+    {id: 'stage4', title: 'Required PR Gate', sub: 'Stage 4, one check', col: 3, row: 1, tone: 'gate'},
+    {id: 'protect', title: 'Branch protection', sub: 'Up to date, threads resolved', col: 3, row: 2, tone: 'gate'},
+    {id: 'main', title: 'main', sub: 'Linear, no force push', col: 2, row: 2, tone: 'output'},
+    {id: 'candidate', title: 'Worker candidate', sub: 'After green main run', col: 1, row: 2, tone: 'output'},
+  ]}
+  edges={[
+    {from: 'branch', to: 'pr'},
+    {from: 'pr', to: 'stage0'},
+    {from: 'stage0', to: 'policy'},
+    {from: 'stage0', to: 'jobs', label: 'selects'},
+    {from: 'policy', to: 'stage4'},
+    {from: 'jobs', to: 'stage4'},
+    {from: 'stage4', to: 'protect'},
+    {from: 'protect', to: 'main'},
+    {from: 'main', to: 'candidate'},
+  ]}
+  caption="The job families are quality, JS supply chain and CodeQL, web and browser contracts, Rust/WASM parity, RustSec, PostGIS/API integration and container rebuild. Stage 4 passes only if all selected jobs pass and all other jobs report skipped. Unknown paths, workflow changes and Dependabot changes run all jobs."
+/>
+
+## Container release and immutable tags
+
+<ArchDiagram
+  label="Release: a dispatched workflow re-admits the tag, re-runs gates, builds multi-arch images and publishes after environment approval"
+  rowPitch={150}
+  nodes={[
+    {id: 'tag', title: 'Annotated tag', sub: 'vX.Y.Z on green main', col: 0, row: 0, tone: 'decision'},
+    {id: 'dispatch', title: 'Dispatch Release', sub: 'From main', col: 1, row: 0, tone: 'decision'},
+    {id: 'admit', title: 'Tag admission', sub: 'Matches package.json', col: 2, row: 0, tone: 'gate'},
+    {id: 'rerun', title: 'Re-run gates', sub: 'Quality through PostGIS', col: 3, row: 0, tone: 'gate'},
+    {id: 'build', title: 'Multi-arch build', sub: 'amd64 and arm64', col: 3, row: 1, tone: 'edge'},
+    {id: 'sbom', title: 'SBOM and manifest', sub: 'SPDX, SHA-256', col: 2, row: 1, tone: 'output'},
+    {id: 'approve', title: 'release environment', sub: 'Maintainer approval', col: 1, row: 1, tone: 'gate'},
+    {id: 'publish', title: 'Publish', sub: 'X.Y.Z and sha-commit tags', col: 0, row: 1, tone: 'output'},
+  ]}
+  edges={[
+    {from: 'tag', to: 'dispatch'},
+    {from: 'dispatch', to: 'admit'},
+    {from: 'admit', to: 'rerun'},
+    {from: 'rerun', to: 'build'},
+    {from: 'build', to: 'sbom'},
+    {from: 'sbom', to: 'approve'},
+    {from: 'approve', to: 'publish'},
+  ]}
+  caption="A tag alone cannot start release code. GHCR gets an immutable X.Y.Z tag and a sha-commit tag. GitHub gets a release with the image digest and attestations. There are no latest, major or minor tags. At this time, publication builds the image again after verification. Thus, promotion of the exact verified bytes is not proven. Issue #111 tracks this gap."
+/>
+
+## Order of migration, promotion and rollback
+
+<ArchDiagram
+  label="Operator path: back up, check the ledger, migrate forward-only, verify, then promote by image digest; rollback changes only the digest"
+  rowPitch={170}
+  nodes={[
+    {id: 'backup', title: 'Verified backup', sub: 'Snapshot or logical', col: 0, row: 0, tone: 'output'},
+    {id: 'ledger', title: 'Ledger prefix check', sub: 'Read-only', col: 1, row: 0, tone: 'gate'},
+    {id: 'migrate', title: 'One-shot migrations', sub: 'Forward-only', col: 2, row: 0, tone: 'edge'},
+    {id: 'readback', title: 'Catalog readback', sub: 'Read-only transaction', col: 3, row: 0, tone: 'gate'},
+    {id: 'verify', title: 'app:verify', sub: 'Against candidate digest', col: 3, row: 1, tone: 'gate'},
+    {id: 'promote', title: 'Promote', sub: 'Set VECTOR_IMAGE digest', col: 2, row: 1, tone: 'edge'},
+    {id: 'rollback', title: 'Rollback', sub: 'Prior digest only', col: 1, row: 1, tone: 'neutral'},
+    {id: 'restore', title: 'Restore backup', sub: 'Into a new database', col: 0, row: 1, tone: 'output'},
+  ]}
+  edges={[
+    {from: 'backup', to: 'ledger'},
+    {from: 'ledger', to: 'migrate'},
+    {from: 'migrate', to: 'readback'},
+    {from: 'readback', to: 'verify'},
+    {from: 'verify', to: 'promote'},
+    {from: 'promote', to: 'rollback', dashed: true, label: 'bad release'},
+    {from: 'readback', to: 'restore', fromAt: 0.2, dashed: true, label: 'migration failed'},
+  ]}
+  caption="An image rollback does not reverse a migration. The operator verifies a restored database again before traffic changes to it. Production does not run the seed service. Backups, .env files, tokens and database URLs must not go into the repository or an image."
+/>
+
+Source contracts: [repository-governance](../contracts/repository-governance) · [container-release](../contracts/container-release)

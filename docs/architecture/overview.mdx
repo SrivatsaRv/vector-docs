@@ -1,0 +1,106 @@
+---
+title: "System architecture: components, data flow and dependencies"
+sidebar_label: System overview
+sidebar_position: 1
+hide_table_of_contents: true
+description: How the browser engine, application service, catalog and records fit together.
+---
+
+Vector Engagement Labs runs the simulation engine in the browser. The hosted service admits inputs, verifies completed runs and stores them. Each diagram on this site is data in this repository. A change to a diagram is a change to the code, and it gets a review.
+
+## System context: browser, service and data stores
+
+<ArchDiagram
+  label="System context: authoring and simulation run in the browser; the service admits model packs and verifies completed runs before storing them"
+  rowPitch={190}
+  groups={[
+    {label: 'Browser simulation (offline once loaded)', nodes: ['compiler', 'engine'], tone: 'core'},
+    {label: 'Application service (stateless)', nodes: ['api', 'verify'], tone: 'dashed'},
+  ]}
+  nodes={[
+    {id: 'builder', title: 'Scenario builder', sub: 'Forces, placement, ROE', col: 0, row: 0, tone: 'decision'},
+    {id: 'compiler', title: 'Scenario compiler', sub: 'Resolves to SI package', col: 1, row: 0},
+    {id: 'engine', title: 'Deterministic engine', sub: 'TypeScript or Rust/WASM', col: 2, row: 0},
+    {id: 'views', title: 'Observe', sub: 'Map, 3D, telemetry, log', col: 3, row: 0, tone: 'decision'},
+    {id: 'api', title: 'Web / API', sub: 'Admission, catalog reads', col: 1, row: 1, tone: 'edge'},
+    {id: 'verify', title: 'Run verification', sub: 'Recompute and hash frames', col: 2, row: 1, tone: 'gate'},
+    {id: 'sources', title: 'Public sources', sub: 'NASA, governed evidence', col: 0, row: 2, tone: 'neutral'},
+    {id: 'catalog', title: 'PostGIS catalog', sub: 'Packs, facts, assertions', col: 1, row: 2, tone: 'output'},
+    {id: 'runs', title: 'Saved runs', sub: 'Immutable, hash-bound', col: 2, row: 2, tone: 'output'},
+    {id: 'report', title: 'Report and replay', sub: 'PDF, JSON, VSR export', col: 3, row: 2, tone: 'output'},
+  ]}
+  edges={[
+    {from: 'builder', to: 'compiler'},
+    {from: 'compiler', to: 'engine'},
+    {from: 'engine', to: 'views', label: 'frames'},
+    {from: 'api', to: 'compiler', label: 'admitted pack'},
+    {from: 'engine', to: 'verify', label: 'completed run'},
+    {from: 'verify', to: 'runs', label: 'hashes match'},
+    {from: 'catalog', to: 'api', label: 'migration-only'},
+    {from: 'sources', to: 'catalog', label: 'compiled'},
+    {from: 'runs', to: 'report'},
+  ]}
+  legend={[
+    {tone: 'decision', label: 'Browser UI'},
+    {tone: 'core', label: 'Simulation engine'},
+    {tone: 'edge', label: 'Service'},
+    {tone: 'gate', label: 'Verification gate'},
+    {tone: 'output', label: 'Durable records'},
+    {tone: 'neutral', label: 'External sources'},
+  ]}
+  caption="The engine does not read the database during a tick. It uses an admitted SI model pack. The browser can save a run only after the run completes. The API then calculates the frames again and compares their hashes before it stores the run."
+/>
+
+## Product stages from scenario entry to report
+
+<ArchDiagram
+  label="Product journey: enter, construct, simulate, observe, explain, compare, report"
+  rowPitch={150}
+  nodes={[
+    {id: 'enter', title: 'Enter', sub: 'Template or blank study', col: 0, row: 0, tone: 'decision'},
+    {id: 'construct', title: 'Construct', sub: 'Forces, loadouts, placement', col: 1, row: 0, tone: 'decision'},
+    {id: 'simulate', title: 'Simulate', sub: 'Deterministic run', col: 2, row: 0, tone: 'core'},
+    {id: 'observe', title: 'Observe', sub: 'Synchronized map and 3D', col: 3, row: 0, tone: 'decision'},
+    {id: 'explain', title: 'Explain', sub: 'Causes and confidence', col: 3, row: 1, tone: 'output'},
+    {id: 'compare', title: 'Compare', sub: 'Variant A vs Variant B', col: 2, row: 1, tone: 'output'},
+    {id: 'report', title: 'Report', sub: 'Save, replay, PDF, export', col: 1, row: 1, tone: 'output'},
+  ]}
+  edges={[
+    {from: 'enter', to: 'construct'},
+    {from: 'construct', to: 'simulate'},
+    {from: 'simulate', to: 'observe'},
+    {from: 'observe', to: 'explain'},
+    {from: 'explain', to: 'compare'},
+    {from: 'compare', to: 'report'},
+  ]}
+  caption="Each product stage is one step in the interface. Uncertainty batches use the same package contract as a single detailed run."
+/>
+
+## Dependency direction between the application and the simulation library
+
+<ArchDiagram
+  label="Dependency direction: the web application depends on the publishable simulation library, never the reverse"
+  rowPitch={170}
+  groups={[
+    {label: 'Web application (consumer)', nodes: ['ui', 'catalog', 'obs'], tone: 'dashed'},
+    {label: 'Simulation library (publishable on its own)', nodes: ['schemas', 'ts', 'rust', 'parity'], tone: 'core'},
+  ]}
+  nodes={[
+    {id: 'ui', title: 'UI and reports', sub: 'Map styles, playback', col: 0, row: 0, tone: 'decision'},
+    {id: 'catalog', title: 'Catalog adapter', sub: 'PostGIS, migrations', col: 1, row: 0, tone: 'output'},
+    {id: 'obs', title: 'Observability', sub: 'Metrics, traces, logs', col: 2, row: 0, tone: 'edge'},
+    {id: 'schemas', title: 'Versioned schemas', sub: 'Scenario, frame, record', col: 0, row: 1.2},
+    {id: 'ts', title: 'TypeScript engine', sub: 'Reference backend', col: 1, row: 1.2},
+    {id: 'rust', title: 'Rust/WASM engine', sub: 'Same interface', col: 2, row: 1.2},
+    {id: 'parity', title: 'Conformance suite', sub: 'Same fixtures, same limits', col: 1.5, row: 2.1, tone: 'gate'},
+  ]}
+  edges={[
+    {from: 'catalog', to: 'ts', label: 'depends on'},
+    {from: 'ts', to: 'schemas'},
+    {from: 'ts', to: 'parity', toAt: 0.3},
+    {from: 'rust', to: 'parity', toAt: 0.7},
+  ]}
+  caption="Renderers and persistence use the engine interface. They do not use a specific backend. A future split of the workspace must keep this dependency direction."
+/>
+
+Source contracts: [README](../contracts) · [engineering-principles](../contracts/engineering-principles)

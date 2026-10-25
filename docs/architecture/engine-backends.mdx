@@ -1,0 +1,106 @@
+---
+title: "Engine backends: one contract and two implementations"
+sidebar_label: Engine backends
+sidebar_position: 3
+hide_table_of_contents: true
+description: One engine contract, two browser implementations, and the gates a backend must pass to be selected.
+---
+
+VECTOR has one engine contract and two implementations. One implementation is a TypeScript reference. The other is a Rust/WebAssembly module. Both get the same immutable `EngineScenario` and return the same `EngineRun`. The deployment manifest selects the backend. The scenario and the user cannot select it.
+
+## Backend interface and dispatch
+
+<ArchDiagram
+  label="Backend interface: both entry points compile to one EngineScenario, and runEngineBackend dispatches only to the backend the deployment manifest admits"
+  rowPitch={180}
+  groups={[{label: 'Engine implementations', nodes: ['ts', 'rust'], tone: 'core'}]}
+  nodes={[
+    {id: 'workbench', title: 'Workbench', sub: 'Construct and run', col: 0, row: 0, tone: 'decision'},
+    {id: 'client', title: 'Simulation client', sub: 'BrowserSimulationClient', col: 1, row: 0, tone: 'decision'},
+    {id: 'compiler', title: 'Scenario compiler', sub: 'Resolves to SI', col: 2, row: 0, tone: 'core'},
+    {id: 'scenario', title: 'EngineScenario', sub: 'Immutable input', col: 3, row: 0, tone: 'output'},
+    {id: 'simulate', title: 'simulate()', sub: 'Server, fixtures, previews', col: 1, row: 1, tone: 'neutral'},
+    {id: 'manifest', title: 'Deployment manifest', sub: 'Content-addressed', col: 2, row: 1, tone: 'output'},
+    {id: 'dispatch', title: 'runEngineBackend', sub: 'Admitted backend only', col: 3, row: 1, tone: 'gate'},
+    {id: 'consumers', title: 'Observe and report', sub: 'Explain, compare, save', col: 0, row: 2, tone: 'decision'},
+    {id: 'run', title: 'EngineRun', sub: 'Frames, events, diagnostics', col: 1, row: 2, tone: 'output'},
+    {id: 'ts', title: 'TypeScript reference', sub: 'typescript-batched-v1', col: 2, row: 2},
+    {id: 'rust', title: 'Rust/WASM', sub: 'rust-json-v1, parity only', col: 3, row: 2},
+  ]}
+  edges={[
+    {from: 'workbench', to: 'client'},
+    {from: 'client', to: 'compiler'},
+    {from: 'compiler', to: 'scenario'},
+    {from: 'simulate', to: 'compiler', fromSide: 'top', toSide: 'bottom', toAt: 0.3},
+    {from: 'scenario', to: 'dispatch'},
+    {from: 'manifest', to: 'dispatch'},
+    {from: 'dispatch', to: 'ts', label: 'selected today'},
+    {from: 'dispatch', to: 'rust', dashed: true},
+    {from: 'ts', to: 'run'},
+    {from: 'run', to: 'consumers'},
+  ]}
+  legend={[
+    {tone: 'decision', label: 'Presentation'},
+    {tone: 'core', label: 'Engine'},
+    {tone: 'output', label: 'Versioned contract'},
+    {tone: 'gate', label: 'Dispatch gate'},
+  ]}
+  caption="The presentation layer does not import a numerical core. The Rust/WASM module must pass a SHA-256 and ABI load check before it runs. At this time, it runs only in verification manifests for parity tests."
+/>
+
+## Backend selection and the records that store it
+
+<ArchDiagram
+  label="Selection: only the deployment manifest selects a backend, and the choice is recorded in three places"
+  rowPitch={170}
+  groups={[{label: 'Selection is recorded in', nodes: ['diag', 'member', 'vsrManifest'], tone: 'dashed'}]}
+  nodes={[
+    {id: 'manifest', title: 'Deployment manifest', sub: 'Content-addressed', col: 0, row: 0, tone: 'output'},
+    {id: 'selected', title: 'Selected backend', sub: 'TypeScript today', col: 1, row: 0, tone: 'gate'},
+    {id: 'forbidden', title: 'Scenario, URL, UI input', sub: 'Saved-run preference, route', col: 2.25, row: 0, tone: 'neutral'},
+    {id: 'diag', title: 'EngineRun diagnostics', col: 0, row: 1},
+    {id: 'member', title: 'Compiled VSR member', col: 1, row: 1},
+    {id: 'vsrManifest', title: 'VSR manifest', col: 2, row: 1},
+  ]}
+  edges={[
+    {from: 'manifest', to: 'selected'},
+    {from: 'forbidden', to: 'selected', blocked: true, label: 'cannot select'},
+    {from: 'selected', to: 'diag'},
+    {from: 'selected', to: 'member'},
+    {from: 'selected', to: 'vsrManifest'},
+  ]}
+  caption="A scenario field, URL parameter, saved-run preference, browser control, package reference or route profile cannot select or change the backend."
+/>
+
+## Gates that make a backend eligible for selection
+
+<ArchDiagram
+  label="Swap boundary: a backend becomes eligible only after reproducible build admission and exact parity with the reference"
+  rowPitch={150}
+  nodes={[
+    {id: 'source', title: 'Rust source', sub: 'Toolchain 1.97.1', col: 0, row: 0, tone: 'core'},
+    {id: 'opt', title: 'Binaryen 131.0.0', sub: 'Post-link optimize', col: 1, row: 0, tone: 'core'},
+    {id: 'fresh', title: 'Fresh build check', sub: 'Bytes equal committed', col: 2, row: 0, tone: 'gate'},
+    {id: 'embed', title: 'Embedded module', sub: 'SHA-256 and length', col: 3, row: 0, tone: 'output'},
+    {id: 'corpus', title: 'Parity corpus', sub: '8 scenarios, both engines', col: 3, row: 1, tone: 'core'},
+    {id: 'exact', title: 'Exact replay', sub: 'Frames, events, effects', col: 2, row: 1, tone: 'gate'},
+    {id: 'numeric', title: 'Exact numerics', sub: 'commandedG, mN drag', col: 1, row: 1, tone: 'gate'},
+    {id: 'eligible', title: 'Eligible to select', sub: 'By manifest only', col: 0, row: 1, tone: 'output'},
+  ]}
+  edges={[
+    {from: 'source', to: 'opt'},
+    {from: 'opt', to: 'fresh'},
+    {from: 'fresh', to: 'embed'},
+    {from: 'embed', to: 'corpus'},
+    {from: 'corpus', to: 'exact'},
+    {from: 'exact', to: 'numeric'},
+    {from: 'numeric', to: 'eligible'},
+  ]}
+  caption="A scan removes verification-only artifacts. These are the generic-AAM WASM and the TP-1538 aero ABI. They must not be in the production module or the Worker."
+/>
+
+## Rust/WASM ABI call order
+
+The production module has a small C ABI. The adapter calls the functions in this order: `vector_abi_version`, `vector_max_input_len`, `vector_input_reserve(length)`, `vector_run_json`, `vector_output_ptr` and `vector_output_len`. Admission accepts a maximum of 1 MiB of JSON. It also sets limits on entity, event, route and integration work before the numerical loop starts.
+
+Source contract: [engine-backends](../contracts/engine-backends)
